@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os/user"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 	"github.com/beltran/gosasl"
 	"github.com/go-zookeeper/zk"
 	"github.com/pkg/errors"
+	"golang.org/x/net/publicsuffix"
 )
 
 const DEFAULT_FETCH_SIZE int64 = 1000
@@ -57,14 +59,15 @@ type ConnectConfiguration struct {
 	FetchSize            int64
 	TransportMode        string
 	HTTPPath             string
-	TLSConfig            *tls.Config
-	ZookeeperNamespace   string
-	Database             string
-	ConnectTimeout       time.Duration
-	SocketTimeout        time.Duration
-	HttpTimeout          time.Duration
-	DialContext          DialContextFunc
-	DisableKeepAlives    bool
+	//HTTPCookies          string
+	TLSConfig          *tls.Config
+	ZookeeperNamespace string
+	Database           string
+	ConnectTimeout     time.Duration
+	SocketTimeout      time.Duration
+	HttpTimeout        time.Duration
+	DialContext        DialContextFunc
+	DisableKeepAlives  bool
 	// Maximum length of the data in bytes. Used for SASL.
 	MaxSize uint32
 }
@@ -252,6 +255,19 @@ func innerConnect(ctx context.Context, host string, port int, auth string,
 			if err != nil {
 				return nil, err
 			}
+
+			httpClient.Jar, err = cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+			if err != nil {
+				return nil, err
+			}
+
+			/*
+				httpClient.Jar, err = newLdapCookieJar(configuration.HTTPCookies)
+				if err != nil {
+					return nil, err
+				}
+			*/
+
 			httpOptions := thrift.THttpClientOptions{Client: httpClient}
 			transport, err = thrift.NewTHttpClientTransportFactoryWithOptions(fmt.Sprintf(protocol+"://%s:%s@%s:%d/"+configuration.HTTPPath, url.QueryEscape(configuration.Username), url.QueryEscape(configuration.Password), host, port), httpOptions).GetTransport(socket)
 			if err != nil {
@@ -684,7 +700,7 @@ func (c *Cursor) fetchIfEmpty(ctx context.Context) {
 	}
 }
 
-//RowMap returns one row as a map. Advances the cursor one
+// RowMap returns one row as a map. Advances the cursor one
 func (c *Cursor) RowMap(ctx context.Context) map[string]interface{} {
 	c.Err = nil
 	c.fetchIfEmpty(ctx)
@@ -1276,3 +1292,51 @@ var DEFAULT_STATUS = hiveserver.TStatus{
 	ErrorCode:    &DEFAULT_ERROR_CODE,
 	ErrorMessage: &DEFAULT_ERROR_MESSAGE,
 }
+
+/*
+type ldapCookieJar struct {
+	validCookieNames map[string]bool
+	entries          http.CookieJar
+}
+
+func (j ldapCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	validCookies := []*http.Cookie{}
+	for _, cookie := range cookies {
+		fmt.Printf("Set: %s:%s\n", cookie.Name, cookie.Value)
+		_, valid := j.validCookieNames[cookie.Name]
+		if valid {
+			validCookies = append(validCookies, cookie)
+		}
+	}
+
+	j.entries.SetCookies(u, cookies)
+}
+
+func (j ldapCookieJar) Cookies(u *url.URL) []*http.Cookie {
+	cookies := j.entries.Cookies(u)
+	for _, cookie := range cookies {
+		fmt.Printf("Get: %s:%s\n", cookie.Name, cookie.Value)
+	}
+	return cookies
+}
+
+func newLdapCookieJar(names string) (ldapCookieJar, error) {
+	cookieNames := strings.Split(names, ",")
+
+	cookieNameMap := map[string]bool{}
+	for _, name := range cookieNames {
+		cookieNameMap[name] = true
+	}
+
+	jar := ldapCookieJar{validCookieNames: cookieNameMap}
+
+	entriesJar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	if err != nil {
+		return jar, err
+	}
+
+	jar.entries = entriesJar
+
+	return jar, nil
+}
+*/
