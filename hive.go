@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"os/user"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 	"github.com/beltran/gosasl"
 	"github.com/go-zookeeper/zk"
 	"github.com/pkg/errors"
+	"golang.org/x/net/publicsuffix"
 )
 
 const DEFAULT_FETCH_SIZE int64 = 1000
@@ -253,7 +255,10 @@ func innerConnect(ctx context.Context, host string, port int, auth string,
 				return nil, err
 			}
 
-			httpClient.Jar = newCookieJar()
+			httpClient.Jar, err = cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+			if err != nil {
+				return nil, err
+			}
 
 			httpOptions := thrift.THttpClientOptions{Client: httpClient}
 			transport, err = thrift.NewTHttpClientTransportFactoryWithOptions(fmt.Sprintf(protocol+"://%s:%s@%s:%d/"+configuration.HTTPPath, url.QueryEscape(configuration.Username), url.QueryEscape(configuration.Password), host, port), httpOptions).GetTransport(socket)
