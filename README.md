@@ -4,6 +4,8 @@
 
 GoHive is a driver for Hive and the [Spark Distributed SQL Engine](https://spark.apache.org/docs/latest/sql-distributed-sql-engine.html) in go that supports connection mechanisms KERBEROS(Gssapi Sasl), NONE(Plain Sasl), LDAP, CUSTOM and NOSASL, both for binary and HTTP transport, with and without SSL. The kerberos mechanism will pick a different authentication level depending on `hive.server2.thrift.sasl.qop`.
 
+GoHive also offers support to query the Hive metastore with various connection mechanisms, including KERBEROS.
+
 ## Installation
 GoHive can be installed with:
 ```
@@ -21,6 +23,8 @@ go get -tags kerberos github.com/beltran/gohive
 ```
 
 ## Quickstart
+
+### Connection to Hive
 
 ```go
     connection, errConn := gohive.Connect("hs2.example.com", 10000, "KERBEROS", configuration)
@@ -57,6 +61,33 @@ go get -tags kerberos github.com/beltran/gohive
 read is discarded from memory so as long as the fetch size is not too big there's no limit to how much
 data can be queried.
 
+### Connection to the Hive Metastore
+
+The thrift client is directly exposed, so the API exposed by the Hive metastore can be called directly.
+
+```go
+    configuration := gohive.NewMetastoreConnectConfiguration()
+    connection, err := gohive.ConnectToMetastore("hm.example.com", 9083, "KERBEROS", configuration)
+    if err != nil {
+        log.Fatal(err)
+    }
+    database := hive_metastore.Database{
+        Name:        "my_new_database",
+        LocationUri: "/"}
+    err = connection.Client.CreateDatabase(context.Background(), &database)
+    if err != nil {
+        log.Fatal(err)
+    }
+    databases, err := connection.Client.GetAllDatabases(context.Background())
+    if err != nil {
+        log.Fatal(err)
+    }
+    log.Println("databases ", databases)
+    connection.Close()
+```
+
+The rest of these docs are pertinent to connect to Hive.
+
 ## Supported connections
 ### Connect with Sasl kerberos:
 ``` go
@@ -92,7 +123,7 @@ This implies setting in hive-site.xml:
 - `hive.server2.authentication = NOSASL`
 
 ### Connect using Http transport mode
-Binary transport mode is supported for this three options(PLAIN, KERBEROS and NOSASL). Http transport is supported for PLAIN and KERBEROS:
+Binary transport mode is supported for auth mechanisms PLAIN, KERBEROS and NOSASL. Http transport mode is supported for PLAIN and KERBEROS:
 ``` go
 configuration := NewConnectConfiguration()
 configuration.HttpPath = "cliservice" // this is the default path in Hive configuration.
@@ -140,4 +171,4 @@ Tests can be run with:
 ```
 ./scripts/integration
 ```
-This uses [dhive](https://github.com/beltran/dhive) and it will start two docker instances with Hive and Kerberos. `kinit`, `klist`, `kdestroy` have to be installed locally. `hs2.example.com` will have to be an alias for 127.0.0.1 in `/etc/hosts`. The krb5 configuration file should be created with `bash scripts/create_krbconf.sh`. Overall the [steps used in the travis CI](https://github.com/beltran/gohive/blob/ec69b5601829296a56ca0558693ed30c11180a94/.travis.yml#L24-L46) can be followed.
+This uses [dhive](https://github.com/beltran/dhive) and it will start three docker instances with Hive, the Hive metastore, and Kerberos. `kinit`, `klist`, `kdestroy` have to be installed locally. `hs2.example.com` and `hm.example.com` will have to be an alias for 127.0.0.1 in `/etc/hosts`. The krb5 configuration file should be created with `bash scripts/create_krbconf.sh`. Overall the [steps used in the travis CI](https://github.com/beltran/gohive/blob/ec69b5601829296a56ca0558693ed30c11180a94/.travis.yml#L24-L46) can be followed.
