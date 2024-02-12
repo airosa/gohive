@@ -529,6 +529,11 @@ func (c *Cursor) Exec(ctx context.Context, query string) {
 
 // Execute sends a query to hive for execution with a context
 func (c *Cursor) Execute(ctx context.Context, query string, async bool) {
+	t, ok := c.conn.transport.(*thrift.THttpClient)
+	if ok {
+		t.DelHeader("Cookie")
+	}
+
 	c.executeAsync(ctx, query)
 	if !async {
 		// We cannot trust in setting executeReq.RunAsync = true
