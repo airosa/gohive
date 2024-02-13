@@ -367,6 +367,7 @@ func innerConnect(ctx context.Context, host string, port int, auth string,
 
 	if configuration.Database != "" {
 		cursor := connection.Cursor()
+		defer cursor.Close()
 		cursor.Exec(context.Background(), "USE "+configuration.Database)
 		if cursor.Err != nil {
 			return nil, cursor.Err
@@ -529,11 +530,6 @@ func (c *Cursor) Exec(ctx context.Context, query string) {
 
 // Execute sends a query to hive for execution with a context
 func (c *Cursor) Execute(ctx context.Context, query string, async bool) {
-	t, ok := c.conn.transport.(*thrift.THttpClient)
-	if ok {
-		t.DelHeader("Cookie")
-	}
-
 	c.executeAsync(ctx, query)
 	if !async {
 		// We cannot trust in setting executeReq.RunAsync = true
@@ -1176,6 +1172,12 @@ func (c *Cursor) Close() {
 }
 
 func (c *Cursor) resetState() error {
+	// Remove the cookie otherwise it gets appended on every call
+	t, ok := c.conn.transport.(*thrift.THttpClient)
+	if ok {
+		t.DelHeader("Cookie")
+	}
+
 	c.response = nil
 	c.Err = nil
 	c.queue = nil
